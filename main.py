@@ -1,53 +1,139 @@
-import matplotlib.pyplot as plt
+import copy
+from deap import base, creator, tools
+import array
 import numpy as np
+from torch.nn import Module
+from torch import from_numpy
+from game import Game
 
-def draw_connect4_board(board):
-    # Create a figure and axis
-    fig, ax = plt.subplots(figsize=(7, 6))
+from neural_net import YourNetwork
 
-    # Define the colors: empty as white, R as red, and Y as yellow
-    color_dict = {"": "white", "R": "red", "Y": "yellow"}
+net_sample: Module = YourNetwork().float()
 
-    # Convert the board to a numerical grid where 0: empty, 1: R, 2: Y for color mapping
-    num_grid = np.zeros((len(board), len(board[0])), dtype=int)
-    for i, row in enumerate(board):
-        for j, cell in enumerate(row):
-            num_grid[i, j] = 0 if cell == "" else (1 if cell == "R" else 2)
 
-    # Create the Connect 4 grid structure
-    ax.matshow(np.ones_like(num_grid), cmap='Blues', vmin=0, vmax=1)
+def genotype_to_phenotype(vector: list[float]) -> Module:
+    # net_sample is needed to build the net from the vector
+    # Individuals in the populations are represented as lists.
+    # In order to evaluate their performance, they need to be converted to
+    # neural network (phenotype)
+    net_copy: Module = copy.deepcopy(net_sample)
+    vector_copy: np.ndarray = copy.deepcopy(np.array(vector, dtype=np.float32))
 
-    # Plot the pieces on the board
-    for (i, j), val in np.ndenumerate(num_grid):
-        if val:  # Only draw if the cell is not empty
-            ax.add_patch(plt.Circle((j, i), 0.45, color=color_dict[board[i][j]]))
+    for p in net_copy.parameters():
+        len_slice: int = p.numel()
+        replace_with: np.ndarray = vector_copy[0:len_slice].reshape(p.data.size())
+        p.data = from_numpy(replace_with)
+        vector_copy = np.delete(vector_copy, np.arange(len_slice))
 
-    # Set the ticks and labels
-    ax.set_xticks(np.arange(len(board[0])))
-    ax.set_yticks(np.arange(len(board)))
-    ax.set_xticklabels(range(1, len(board[0]) + 1))
-    ax.set_yticklabels(range(1, len(board) + 1))
-    ax.set_xticks(np.arange(-.5, len(board[0]), 1), minor=True)
-    ax.set_yticks(np.arange(-.5, len(board), 1), minor=True)
-    ax.grid(which='minor', color='black', linestyle='-', linewidth=2)
+    return net_copy
 
-    # Hide the major tick labels
-    ax.tick_params(which='major', size=0)
 
-    # Set aspect ratio to be equal
-    ax.set_aspect('equal')
+from deap import base, creator, tools
+import random
+from game import MoveResult, Game
 
-    # Show the plot
-    plt.show()
 
-# Test the function with a sample board
-sample_board = [
-    ["R", "Y", "R", "R", "Y", "R", "Y"],
-    ["R", "R", "Y", "Y", "R", "", ""],
-    ["Y", "Y", "R", "R", "", "", ""],
-    ["Y", "R", "Y", "", "", "", ""],
-    ["R", "Y", "R", "", "", "", ""],
-    ["Y", "R", "", "", "", "", ""]
-]
+def play_game(individual1, individual2) -> tuple[MoveResult, int]:
+    # Convert the individuals to neural networks
+    net1 = genotype_to_phenotype(individual1)
+    net2 = genotype_to_phenotype(individual2)
 
-draw_connect4_board(sample_board)
+    # Play a game of Connect4 between the two individuals
+    game = Game()
+    last_move = None
+    player1_move = True
+    while last_move not in {
+        MoveResult.PLAYER1_WON,
+        MoveResult.PLAYER2_WON,
+        MoveResult.DRAW,
+        MoveResult.INVALID_MOVE,
+    }:
+        if player1_move:
+            move = net1.forward(game.vectorize_board())
+            last_move = game.player1_move(move)
+        else:
+            move = net2.forward(game.vectorize_board())
+            last_move = game.player2_move(move)
+        player1_move = not player1_move
+    return last_move, game.player1_moves + game.player2_moves
+
+
+# Define the fitness function
+def evaluate(individual: list[float]):
+    # Convert the individual to a neural network
+
+    # Play a game of Connect4 against 20 other individuals and compute the fitness score
+    score = 0
+    for _ in range(50):
+        opponent = random.choice(population)
+        game_result, num_moves = play_game(individual, opponent)
+        score += num_moves * 2
+        if game_result == MoveResult.PLAYER1_WON:
+            score += 100
+        elif game_result == MoveResult.PLAYER2_WON:
+            score -= 10
+        elif game_result == MoveResult.INVALID_MOVE:
+            score -= 70
+    return (score,)
+
+
+# Define the individual and population
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", list, fitness=creator.FitnessMax)
+
+toolbox = base.Toolbox()
+
+
+def float32_generator():
+    return np.float32(random.uniform(-1, 1))
+
+
+toolbox.register("attr_float", float32_generator)
+toolbox.register(
+    "individual",
+    tools.initRepeat,
+    creator.Individual,
+    toolbox.attr_float,
+    n=net_sample.num_params(),
+)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+
+# Generate the initial population
+population = toolbox.population(n=100)
+
+# Register the evaluation function
+toolbox.register("evaluate", evaluate)
+
+# Register the crossover operator
+toolbox.register("mate", tools.cxTwoPoint)
+
+# Register a mutation operator
+toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.2, indpb=0.1)
+
+# Register the selection operator
+toolbox.register("select", tools.selTournament, tournsize=3)
+
+# Run the algorithm
+NGEN = 10000
+for gen in range(NGEN):
+    print(f"Generation {gen}")
+    offspring = toolbox.select(population, len(population))
+    offspring = list(map(toolbox.clone, offspring))
+
+    for child1, child2 in zip(offspring[::2], offspring[1::2]):
+        if random.random() < 0.5:
+            toolbox.mate(child1, child2)
+            del child1.fitness.values
+            del child2.fitness.values
+
+    for mutant in offspring:
+        if random.random() < 0.2:
+            toolbox.mutate(mutant)
+            del mutant.fitness.values
+
+    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    fitnesses = map(toolbox.evaluate, invalid_ind)
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = fit
+
+    population[:] = offspring
