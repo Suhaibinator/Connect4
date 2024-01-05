@@ -1,6 +1,6 @@
 import copy
 from deap import base, creator, tools
-import array
+from scoop import futures
 import numpy as np
 from torch.nn import Module
 from torch import from_numpy
@@ -98,6 +98,9 @@ toolbox.register(
 )
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
+# Register the map function
+toolbox.register("map", futures.map)
+
 # Generate the initial population
 population = toolbox.population(n=100)
 
@@ -131,10 +134,12 @@ for gen in range(NGEN):
             toolbox.mutate(mutant)
             del mutant.fitness.values
 
-    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-    fitnesses = map(toolbox.evaluate, invalid_ind)
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in population if not ind.fitness.valid]
+    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+
     for ind, fit in zip(invalid_ind, fitnesses):
-        ind.fitness.values = fit
+        ind.fitness.values = fit,
 
     population[:] = offspring
 
