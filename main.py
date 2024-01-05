@@ -116,35 +116,37 @@ toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.2, indpb=0.1)
 # Register the selection operator
 toolbox.register("select", tools.selTournament, tournsize=3)
 
-# Run the algorithm
-NGEN = 1000
-for gen in range(NGEN):
-    print(f"Generation {gen}")
-    offspring = toolbox.select(population, len(population))
-    offspring = list(map(toolbox.clone, offspring))
 
-    for child1, child2 in zip(offspring[::2], offspring[1::2]):
-        if random.random() < 0.5:
-            toolbox.mate(child1, child2)
-            del child1.fitness.values
-            del child2.fitness.values
+if __name__ == "__main__":
+    # Run the algorithm
+    NGEN = 1000
+    for gen in range(NGEN):
+        print(f"Generation {gen}")
+        offspring = toolbox.select(population, len(population))
+        offspring = list(map(toolbox.clone, offspring))
 
-    for mutant in offspring:
-        if random.random() < 0.2:
-            toolbox.mutate(mutant)
-            del mutant.fitness.values
+        for child1, child2 in zip(offspring[::2], offspring[1::2]):
+            if random.random() < 0.5:
+                toolbox.mate(child1, child2)
+                del child1.fitness.values
+                del child2.fitness.values
 
-    # Evaluate the individuals with an invalid fitness
-    invalid_ind = [ind for ind in population if not ind.fitness.valid]
-    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        for mutant in offspring:
+            if random.random() < 0.2:
+                toolbox.mutate(mutant)
+                del mutant.fitness.values
 
-    for ind, fit in zip(invalid_ind, fitnesses):
-        ind.fitness.values = fit,
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ind for ind in population if not ind.fitness.valid]
+        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
 
-    population[:] = offspring
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit,
 
-# pickle the population
-import pickle
+        population[:] = offspring
 
-with open("population.pkl", "wb") as f:
-    pickle.dump(population, f)
+    # pickle the population
+    import pickle
+
+    with open("population.pkl", "wb") as f:
+        pickle.dump(population, f)
