@@ -1,13 +1,13 @@
 import random
-import matplotlib
-
-matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
+import pygame
 import numpy as np
 
 
 from enum import Enum
 
+
+PLAYER1_CHAR = "Y"
+PLAYER2_CHAR = "R"
 
 class MoveResult(Enum):
     MOVE_MADE = 1
@@ -31,9 +31,9 @@ class Game:
         result = np.zeros((42,), dtype=np.float32)
         for i, row in enumerate(self.board):
             for j, cell in enumerate(row):
-                if cell == "R":
+                if cell == PLAYER1_CHAR:
                     result[i * 7 + j] = 1
-                elif cell == "Y":
+                elif cell == PLAYER2_CHAR:
                     result[i * 7 + j] = 2
         return result
 
@@ -53,7 +53,7 @@ class Game:
             if count == 4:
                 return (
                     MoveResult.PLAYER1_WON
-                    if self.board[row][column] == "R"
+                    if self.board[row][column] == PLAYER1_CHAR
                     else MoveResult.PLAYER2_WON
                 )
 
@@ -67,7 +67,7 @@ class Game:
             if count == 4:
                 return (
                     MoveResult.PLAYER1_WON
-                    if self.board[row][column] == "R"
+                    if self.board[row][column] == PLAYER1_CHAR
                     else MoveResult.PLAYER2_WON
                 )
 
@@ -87,7 +87,7 @@ class Game:
                 if count == 4:
                     return (
                         MoveResult.PLAYER1_WON
-                        if self.board[row][column] == "R"
+                        if self.board[row][column] == PLAYER1_CHAR
                         else MoveResult.PLAYER2_WON
                     )
 
@@ -103,7 +103,7 @@ class Game:
             row = self.get_row(column)
             if row == -1:
                 return MoveResult.INVALID_MOVE
-            self.board[row][column] = "Y"
+            self.board[row][column] = PLAYER1_CHAR
             self.column_chips[column] += 1
             return self.check_win(row, column)
         else:
@@ -119,50 +119,51 @@ class Game:
             row = self.get_row(column)
             if row == -1:
                 return MoveResult.INVALID_MOVE
-            self.board[row][column] = "R"
+            self.board[row][column] = PLAYER2_CHAR
             self.column_chips[column] += 1
             return self.check_win(row, column)
         else:
             raise Exception("Player 1's turn!")
 
-    def draw_board(self):
-        # Create a figure and axis
-        fig, ax = plt.subplots(figsize=(7, 6))
-
-        # Define the colors: empty as white, R as red, and Y as yellow
-        color_dict = {"": "white", "R": "red", "Y": "yellow"}
-
-        # Convert the board to a numerical grid where 0: empty, 1: R, 2: Y for color mapping
-        num_grid = np.zeros((len(self.board), len(self.board[0])), dtype=int)
-        for i, row in enumerate(self.board):
-            for j, cell in enumerate(row):
-                num_grid[i, j] = 0 if cell == "" else (1 if cell == "R" else 2)
-
-        # Create the Connect 4 grid structure
-        ax.matshow(np.ones_like(num_grid), cmap="Blues", vmin=0, vmax=1)
-
-        # Plot the pieces on the board
-        for (i, j), val in np.ndenumerate(num_grid):
-            if val:  # Only draw if the cell is not empty
-                ax.add_patch(
-                    plt.Circle((j, i), 0.45, color=color_dict[self.board[i][j]])
-                )
-
-        # Set the ticks and labels
-        ax.set_xticks(np.arange(len(self.board[0])))
-        ax.set_yticks(np.arange(len(self.board)))
-        ax.set_xticklabels(range(1, len(self.board[0]) + 1))
-        ax.set_yticklabels(range(1, len(self.board) + 1))
-        ax.set_xticks(np.arange(-0.5, len(self.board[0]), 1), minor=True)
-        ax.set_yticks(np.arange(-0.5, len(self.board), 1), minor=True)
-        ax.grid(which="minor", color="black", linestyle="-", linewidth=2)
-
-        # Hide the major tick labels
-        ax.tick_params(which="major", size=0)
-
-        # Set aspect ratio to be equal
-        ax.set_aspect("equal")
-
-        # Show the plot
-        plt.show()
-
+    def draw_board(self, screen=None):
+        if screen is None:
+            screen = pygame.display.get_surface()
+        screen.fill((0, 0, 0))
+        for i in range(6):
+            for j in range(7):
+                if self.board[i][j] == "R":
+                    pygame.draw.circle(screen, (255, 0, 0), (j * 100 + 50, i * 100 + 50), 40)
+                elif self.board[i][j] == "Y":
+                    pygame.draw.circle(screen, (255, 255, 0), (j * 100 + 50, i * 100 + 50), 40)
+                else:
+                    pygame.draw.circle(screen, (255, 255, 255), (j * 100 + 50, i * 100 + 50), 40)
+        pygame.display.flip()
+        
+if __name__ == "__main__":
+    game = Game()
+    pygame.init()
+    screen = pygame.display.set_mode((700, 600))
+    pygame.display.set_caption("Connect 4")
+    game.draw_board(screen)
+    player1_move = True
+    move = None
+    while move not in {MoveResult.PLAYER1_WON, MoveResult.PLAYER2_WON, MoveResult.DRAW}:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.MOUSEBUTTONUP:
+                if player1_move:
+                    move = game.player1_move(event.pos[0] // 100)
+                else:
+                    move = game.player2_move(event.pos[0] // 100)
+                game.draw_board(screen)
+                if move == MoveResult.PLAYER1_WON:
+                    print("Player 1 won!")
+                elif move == MoveResult.PLAYER2_WON:
+                    print("Player 2 won!")
+                elif move == MoveResult.INVALID_MOVE:
+                    print("Invalid move!")
+                elif move == MoveResult.DRAW:
+                    print("Draw!")
+                player1_move = not player1_move
