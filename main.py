@@ -1,10 +1,10 @@
 import copy
 from deap import base, creator, tools
-from scoop import futures
 import numpy as np
 from torch.nn import Module
 from torch import from_numpy
 from game import Game
+from multiprocessing import Pool, set_start_method
 
 from neural_net import YourNetwork
 
@@ -59,7 +59,7 @@ def play_game(individual1, individual2) -> tuple[MoveResult, int]:
 
 
 # Define the fitness function
-def evaluate(individual: list[float]) -> int:
+def evaluate(individual: list[float]) -> tuple[int]:
     # Convert the individual to a neural network
 
     # Play a game of Connect4 against 20 other individuals and compute the fitness score
@@ -74,7 +74,7 @@ def evaluate(individual: list[float]) -> int:
             score -= 10
         elif game_result == MoveResult.INVALID_MOVE:
             score -= 70
-    return score
+    return (score, )
 
 
 # Define the individual and population
@@ -97,9 +97,6 @@ toolbox.register(
     n=net_sample.num_params(),
 )
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-
-# Register the map function
-toolbox.register("map", futures.map)
 
 # Generate the initial population
 population = toolbox.population(n=100)
@@ -136,12 +133,17 @@ if __name__ == "__main__":
                 toolbox.mutate(mutant)
                 del mutant.fitness.values
 
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in population if not ind.fitness.valid]
-        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
 
+        set_start_method("spawn")
+
+        # Create a pool of workers
+        with Pool() as pool:
+            fitnesses = pool.map(evaluate, invalid_ind)
+
+        # Assign the fitnesses to the individuals
         for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit,
+            ind.fitness.values = fit
 
         population[:] = offspring
 
