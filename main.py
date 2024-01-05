@@ -59,7 +59,7 @@ def play_game(individual1, individual2) -> tuple[MoveResult, int]:
 
 
 # Define the fitness function
-def evaluate(individual: list[float]):
+def evaluate(individual: list[float]) -> int:
     # Convert the individual to a neural network
 
     # Play a game of Connect4 against 20 other individuals and compute the fitness score
@@ -74,7 +74,7 @@ def evaluate(individual: list[float]):
             score -= 10
         elif game_result == MoveResult.INVALID_MOVE:
             score -= 70
-    return (score,)
+    return score
 
 
 # Define the individual and population
