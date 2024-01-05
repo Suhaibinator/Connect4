@@ -114,7 +114,7 @@ toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.2, indpb=0.1)
 toolbox.register("select", tools.selTournament, tournsize=3)
 
 # Run the algorithm
-NGEN = 10000
+NGEN = 1000
 for gen in range(NGEN):
     print(f"Generation {gen}")
     offspring = toolbox.select(population, len(population))
@@ -137,3 +137,9 @@ for gen in range(NGEN):
         ind.fitness.values = fit
 
     population[:] = offspring
+
+# pickle the population
+import pickle
+
+with open("population.pkl", "wb") as f:
+    pickle.dump(population, f)

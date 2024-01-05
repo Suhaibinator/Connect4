@@ -19,6 +19,9 @@ class YourNetwork(nn.Module):
         self.hidden_linear2 = nn.Linear(hidden_size1, hidden_size2).float()
         self.output_linear = nn.Linear(hidden_size2, output_size).float()
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.to(self.device)
+
     def num_params(self):
         return self._total_weights
 
