@@ -4,7 +4,6 @@ import numpy as np
 from torch.nn import Module
 from torch import from_numpy
 from game import Game
-from multiprocessing import Pool, set_start_method
 
 from neural_net import YourNetwork
 
@@ -115,6 +114,11 @@ toolbox.register("select", tools.selTournament, tournsize=3)
 
 
 if __name__ == "__main__":
+
+    import multiprocessing as mp
+
+    mp.set_start_method("spawn")
+
     # Run the algorithm
     NGEN = 1000
     for gen in range(NGEN):
@@ -135,10 +139,8 @@ if __name__ == "__main__":
 
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
 
-        set_start_method("spawn")
-
         # Create a pool of workers
-        with Pool() as pool:
+        with mp.Pool() as pool:
             fitnesses = pool.map(evaluate, invalid_ind)
 
         # Assign the fitnesses to the individuals
